@@ -10,6 +10,17 @@
 @media(max-width:980px){.layout{grid-template-columns:1fr}.sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar .wide{grid-column:1/-1}.topline{align-items:flex-start;flex-direction:column}}
 @media(max-width:600px){header{align-items:flex-start}.head-actions .btn{padding:.55rem .7rem;font-size:.82rem}.sidebar{grid-template-columns:1fr}.sidebar .wide{grid-column:auto}.board{min-width:700px}.target-grid{grid-template-columns:repeat(3,1fr)}main{padding-inline:.5rem}.panel{padding:.85rem}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
+
+/* Keep the concert area inside the perimeter track. */
+.board-title{top:15%}
+.stage{top:24%;height:49%;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:5% 2.2%}
+.stage-slot{grid-column:span 2;grid-template-rows:minmax(0,1fr) auto;min-width:0}
+.stage-slot img{min-height:0;min-width:0}
+.stage-slot:nth-child(5){grid-column:2 / span 2;margin-left:0}
+.stage-slot:nth-child(6){grid-column:4 / span 2}
+.stage-slot:nth-child(7){grid-column:6 / span 2;margin-right:0}
+.music-panel{top:77%;height:8%}
+@media(max-width:600px){header{flex-wrap:wrap}.brand{min-width:0}.dice-controls{flex-wrap:wrap}}
 </style>
 </head>
 <body>
@@ -68,23 +79,29 @@ function renderAction(){let a=$('actionArea'),buttons=$('actionButtons');buttons
  else if(act.kind==='search'){a.innerHTML=`Buscando <b>${esc(NOTE_DATA[act.target].name)}</b>: levanta una tarjeta boca abajo.`}
  else if(act.kind==='wrong'){a.innerHTML=`Salió <b>${esc(NOTE_DATA[act.revealed].key)}</b>, todavía no es esa. Recuerda dónde está.`;addBtn(buttons,'Continuar','primary',endTurn)}
  else if(act.kind==='right'){a.innerHTML=`¡Encontraron <b>${esc(NOTE_DATA[act.revealed].name)}</b>! Quedó en el escenario.`;addBtn(buttons,'Seguir','primary',endTurn)}
- else if(act.kind==='build'){a.innerHTML='Añade un pulso a la partitura.';addBtn(buttons,'♩ Nota','soft',()=>addPulse('N'));addBtn(buttons,'𝄽 Silencio','soft',()=>addPulse('S'));}
+ else if(act.kind==='build'){a.innerHTML='Añade una negra o un silencio. Después termina el turno para que juegue la siguiente persona.';addBtn(buttons,'♩ Nota','soft',()=>addPulse('N'));addBtn(buttons,'𝄽 Silencio','soft',()=>addPulse('S'));}
+ else if(act.kind==='composed'){offerComposed();}
  else if(act.kind==='rhythm'){a.innerHTML=`Interpreten juntos la carta <b>${act.num}</b>. Una palma por ♩, pausa por 𝄽.`;patternUI(act.pattern,buttons);addBtn(buttons,'▶ Escuchar ritmo','soft',()=>playPattern(act.pattern));addBtn(buttons,'Lo logramos ⭐','primary',()=>rhythmResult(true));addBtn(buttons,act.attempt===0?'Repetir una vez':'No salió esta vez','soft',()=>rhythmResult(false));}
  else if(act.kind==='listen'){a.innerHTML=act.played?`¿Cuántos golpes escuchaste?`:'Pulsa el botón para escuchar y cuenta los golpes.';if(!act.played)addBtn(buttons,'▶ Escuchar','primary',()=>playListen());else{for(let i=1;i<=6;i++)addBtn(buttons,String(i),'soft',()=>answerListen(i))}}
  else if(act.kind==='listenWrong'){a.innerHTML='¡Buen intento! ¿Quieren escuchar una vez más?';addBtn(buttons,'▶ Repetir','soft',()=>playListen());for(let i=1;i<=6;i++)addBtn(buttons,String(i),i===act.answer?'warm':'soft',()=>answerListen(i));addBtn(buttons,'Continuar','soft',endTurn)}
  else if(act.kind==='peek'){a.innerHTML='Vuelve a voltear la tarjeta o tarjetas y trata de recordar su lugar.';act.revealed.forEach(slot=>addBtn(buttons,'Voltear '+(slot+1),'soft',()=>flipPeek(slot)));if(!act.revealed.length)addBtn(buttons,'Terminar vistazo','soft',endTurn)}
- else if(act.kind==='powerChoice'){a.innerHTML='Elige una acción musical para el poder de Si.';addBtn(buttons,'Buscar una nota','soft',beginSearch);addBtn(buttons,'Añadir pulso','soft',()=>state.action={kind:'build'});addBtn(buttons,'Tocar un ritmo','soft',startRhythm)}
+ else if(act.kind==='powerChoice'){a.innerHTML='Elige una acción musical para el poder de Si.';addBtn(buttons,'Buscar una nota','soft',beginSearch);addBtn(buttons,'Añadir pulso','soft',()=>{state.action={kind:'build'};render();save()});addBtn(buttons,'Tocar un ritmo','soft',startRhythm)}
  else if(act.kind==='done'){a.textContent=act.message;addBtn(buttons,'Terminar turno','primary',endTurn)}
 }
 function addBtn(parent,label,cls,fn){let b=document.createElement('button');b.className='btn '+cls;b.textContent=label;b.onclick=fn;parent.append(b)}
 function patternUI(pattern,parent){let row=document.createElement('div');row.className='rhythm';for(const v of pattern){let e=document.createElement('div');e.className='beat';e.textContent=v==='N'?'♩':'𝄽';row.append(e)}parent.append(row)}
-function addPulse(v){if(state.pulses.length>=4)return;state.pulses.push(v);state.action=null;if(state.pulses.length===4){state.action={kind:'composed',pattern:state.pulses.join(''),attempt:0};offerComposed()}else{state.action={kind:'build'};renderAction()}render();save()}
+function addPulse(v){
+ if(state.action?.kind!=='build'||state.pulses.length>=4)return;
+ state.pulses.push(v);
+ if(state.pulses.length===4){state.action={kind:'composed',pattern:state.pulses.join(''),attempt:0};render();save();}
+ else finishAfterAction(`Añadieron ${v==='N'?'una negra':'un silencio'} (${state.pulses.length}/4 pulsos). Termina el turno para que juegue la siguiente persona.`);
+}
 function offerComposed(){let a=state.action;$('actionArea').innerHTML='La partitura está completa. ¡Tóquenla juntos!';$('actionButtons').innerHTML='';patternUI(a.pattern,$('actionButtons'));addBtn($('actionButtons'),'▶ Escuchar','soft',()=>playPattern(a.pattern));addBtn($('actionButtons'),'Lo logramos ⭐','primary',()=>{state.stars=Math.min(3,state.stars+1);state.pulses=[];state.action=null;checkWin();finishAfterAction('¡Una estrella más!')});addBtn($('actionButtons'),a.attempt===0?'Ensayar otra vez':'Seguir sin estrella','soft',()=>{if(a.attempt===0){a.attempt=1;offerComposed()}else{state.pulses=[];state.action=null;finishAfterAction('¡A la próxima sale!')}})}
 function beginSearch(){if(state.found.length===7){state.action={kind:'done',message:'Ya encontraron todas las Notitas.'};render();return}state.action={kind:'chooseSearch'};render()}
 function chooseTarget(i){if(state.found.includes(i)){toast('Esa Notita ya está en el escenario.');return}state.pendingTarget=i;state.action={kind:'search',target:i,slot:null};render();toast(`Ahora levanta una tarjeta para buscar ${NOTE_DATA[i].key}.`)}
 function memoryClick(slot){let a=state.action;if(a?.kind==='search'){if(a.slot!==null)return;a.slot=slot;let id=state.positions[slot];a.revealed=id;render();if(id===a.target){state.found.push(id);state.powers[id]=state.powers[id]||[];state.action={kind:'right',revealed:id};toast(`¡Encontraron ${NOTE_DATA[id].key}!`);checkWin()}else{state.action={kind:'wrong',revealed:id,slot};toast(`Era ${NOTE_DATA[id].key}. ¡A recordar su lugar!`)}save();render()}else if(a?.kind==='peek'){if(a.count===7){toast('Mira las posiciones: las tarjetas se ocultarán en 20 segundos.');return}if(a.revealed.includes(slot)){flipPeek(slot);return}if(a.revealed.length<a.count){a.revealed.push(slot);render()}else toast('Este poder alcanza para '+a.count+' tarjetas.')}else toast('Las tarjetas se levantan cuando buscan una nota o usan un poder.');}
 function checkWin(){if(state.found.length===7&&state.stars>=3){state.gameWon=true;state.phase='over';state.action={kind:'done',message:'¡Las siete notas y tres estrellas! ¡Empieza el concierto!'};save();render();toast('¡Lo lograron! 🎉')}}
-function finishAfterAction(msg){checkWin();if(state.gameWon)return;state.action={kind:'done',message:msg};render();save()}
+function finishAfterAction(msg){if(state.gameWon)return;checkWin();if(state.gameWon)return;state.action={kind:'done',message:msg};render();save()}
 function doRoll(values){state.pendingRoll=values;let chosen=values.length===1?values[0]:null;renderDice(values);if(chosen!==null)move(chosen);else{$('choiceArea').innerHTML='';values.forEach((v,i)=>addBtn($('choiceArea'),`Avanzar ${v} (dado ${i+1})`,i===0?'primary':'soft',()=>{state.pendingRoll=null;$('choiceArea').innerHTML='';move(v)}));state.phase='choosing';$('rollBtn').disabled=true}}
 function renderDice(values){$('die1').textContent='⚄';$('die2').textContent=values.length===2?'⚁':'';setTimeout(()=>{$('die1').textContent=['⚀','⚁','⚂','⚃','⚄','⚅'][values[0]-1];if(values.length===2)$('die2').textContent=['⚀','⚁','⚂','⚃','⚄','⚅'][values[1]-1]},160)}
 function roll(){if(state.phase!=='ready')return;let vals=[1+Math.floor(Math.random()*6)];if(state.mode===2)vals.push(1+Math.floor(Math.random()*6));doRoll(vals)}
